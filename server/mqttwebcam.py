@@ -8,6 +8,7 @@ import cv2
 import base64
 import mosquitto as mqtt
 import sys
+import time
 
 
 #mqtt settings
@@ -18,6 +19,8 @@ MQTT_BASE_TOPIC = 'mik/webcam'
 #camera settings
 camera = 0
 dummyframes = 10
+old_time = 0
+minimal_wait = 5
 
 webcam = cv2.VideoCapture(camera)
 
@@ -37,17 +40,23 @@ def on_connect(mosq,obj,rc):
 
 # The callback for when a message is received from the server.  
 def on_message(client, userdata, msg):  
+	global old_time
 	sys.stderr.write ('Received message:' + str(msg.payload) + ' on: ' + MQTT_BASE_TOPIC + '\r\n')  
 
-	#boot camera with dummyframes
-	for i in xrange(dummyframes):
-	   get_single_image()
+	epoch_time = int(time.time())
 
-	camera_capture = get_single_image()
-	resized_camera_capture = cv2.resize(camera_capture, (100, 50)) 
-	retval, data =  cv2.imencode('.jpeg', resized_camera_capture)
-	client.publish(MQTT_BASE_TOPIC+'/image', base64.b64encode(data.tostring()))
-	sys.stderr.write ('Published message to :' + MQTT_BASE_TOPIC + '/image\r\n')  
+	if ((old_time + minimal_wait) <= epoch_time):
+		#boot camera with dummyframes
+		for i in xrange(dummyframes):
+		   get_single_image()
+
+		camera_capture = get_single_image()
+		resized_camera_capture = cv2.resize(camera_capture, (100, 50)) 
+		retval, data =  cv2.imencode('.jpeg', resized_camera_capture)
+		client.publish(MQTT_BASE_TOPIC+'/image', base64.b64encode(data.tostring()),qos=0,retain=True)
+		client.publish(MQTT_BASE_TOPIC+'/time', epoch_time,qos=0,retain=True)
+		sys.stderr.write ('Published message to :' + MQTT_BASE_TOPIC + '/image\r\n')  
+		old_time = epoch_time
 
 client = mqtt.Mosquitto()  
 client.on_connect = on_connect  
