@@ -12,7 +12,7 @@ import time
 
 
 #mqtt settings
-MQTT_HOST = '192.168.140.30'
+MQTT_HOST = '127.0.0.1'
 MQTT_PORT = 1883
 MQTT_BASE_TOPIC = 'mik/webcam'
 
@@ -21,6 +21,7 @@ camera = 0
 dummyframes = 10
 old_time = 0
 minimal_wait = 5
+resize_to = (640,480)
 
 webcam = cv2.VideoCapture(camera)
 
@@ -32,6 +33,7 @@ def get_single_image():
 def on_connect(mosq,obj,rc):
    sys.stderr.write ('Connected with result code:' + str(rc) + ' to ' + MQTT_HOST + '\r\n')  
   
+   client.publish(MQTT_BASE_TOPIC+'/status', 'online',qos=0,retain=True)
    # Subscribing in on_connect() means that if we lose the connection and  
    # reconnect then subscriptions will be renewed.  
    client.subscribe(MQTT_BASE_TOPIC)  
@@ -51,7 +53,7 @@ def on_message(client, userdata, msg):
 		   get_single_image()
 
 		camera_capture = get_single_image()
-		resized_camera_capture = cv2.resize(camera_capture, (100, 50)) 
+		resized_camera_capture = cv2.resize(camera_capture, resize_to) 
 		retval, data =  cv2.imencode('.jpeg', resized_camera_capture)
 		client.publish(MQTT_BASE_TOPIC+'/image', base64.b64encode(data.tostring()),qos=0,retain=True)
 		client.publish(MQTT_BASE_TOPIC+'/time', epoch_time,qos=0,retain=True)
@@ -62,6 +64,7 @@ client = mqtt.Mosquitto()
 client.on_connect = on_connect  
 client.on_message = on_message  
   
+client.will_set(MQTT_BASE_TOPIC + '/status','offline',qos=0,retain=True)
 client.connect(MQTT_HOST, MQTT_PORT, 60)  
   
 # Blocking call that processes network traffic, dispatches callbacks and  
